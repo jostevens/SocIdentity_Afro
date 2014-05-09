@@ -1,0 +1,353 @@
+SEM Final Project
+==================
+
+This project is designed to look at how social-identity effects physical and mental health in a sub-Saharan African context. The data come from 15 stable, democratic, countries in Sub-Saharan Africa. I propose that social-identity has a significant effect on health even when accounting for socio-economic status and absolute levels of deprivation.
+
+```{r intData, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fig.width=7, fig.height=6}
+library("Hmisc")
+r2clean <- spss.get("http://www.afrobarometer.org/files/documents/data/merged_r2_data.sav", use.value.labels=FALSE)
+```
+
+The data comes from round 2 of the Afrobarometer survey, collected from 2002-2004. This data will be test the theoretical models shown below. First I will present three CFA models to test the constructs of socio-economic status (SE), deprivation (Dep) and social-identity status (SI).
+
+```{r processData, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+keep <- c("country","urbrur","region","q1b","q2a","q2b","q6a","q9a","q9b","q9c","q9d","q9e","q9f", "q54", "q55", "q56", "q57","q80", "q81", "q82", "q84", "q88", "q89", "q90", "q93a", "q93b", "q96", "q96new")
+r2light <- data.frame(r2clean[keep])
+r2light[r2light==-1] <- NA # Codes for "missing" set to NA
+
+
+
+  r2light$country  <- factor(r2clean$country, 
+                             levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16), 
+                             labels=c("Botswana", "Ghana", "Lesotho", "Malawi", "Mali", "Namibia", "Nigeria", "South Africa", "Tanzania", "Uganda", "Zambia", "Zimbabwe", "Cape Verde", "Kenya", "Mozambique", "Senegal"))
+
+
+#q1B In general, how would you describe: Your own present living conditions?
+  names(r2light)[4] <- paste("liveCond")
+  r2light$liveCond[r2light$liveCond >= 7] <- NA  # Codes for "I don't know, or "Refused to answer" set to NA --- this is repeated through most fields
+  r2light$liveCond  <- ordered(r2clean$q1b, 
+                               levels = c(1, 2, 3, 4, 5), 
+                               labels=c("Very bad", "Fairly bad","Neither good nor bad", "Fairly good", "Very good"))
+
+#q2a In general, how do you rate: The economic conditions in this country compared to those in neighbouring countries?
+  names(r2light)[5] <- paste("CEconStat")
+  r2light$CEconStat[r2light$CEconStat >= 7] <- NA
+  r2light$CEconStat  <- ordered(r2clean$q2a, 
+                                levels = c(1, 2, 3, 4, 5), 
+                                labels=c("Much worse", "Worse","Same", "Better", "Much better"))
+
+#q2b In general, how do you rate: Your living conditions compared to those of other {countrymen]?
+  names(r2light)[6] <- paste("relDep")
+  r2light$relDep[r2light$relDep >= 7] <- NA
+  r2light$relDep  <- ordered(r2clean$q2b, 
+                             levels = c(1, 2, 3, 4, 5), 
+                             labels=c("Much worse", "Worse","Same", "Better", "Much better"))
+
+#q6a On a scale between 0 and 10, where 0 are “poor” people and 10 are “rich” people: Which number would you give yourself today?
+#   0=Poor, 1=1, 2=2, 3=3, 4=4, 5=5, 6=6, 7=7, 8=8, 9=9, 10=Rich, 97=Not Applicable, 98=Refused to Answer, 99=Don’t Know, -1=Missing Data
+  names(r2light)[7] <- paste("iEconStatus")
+  r2light$iEconStatus[r2light$iEconStatus >= 11] <- NA
+
+#q9a-f Over the past year, how often, if ever, have you or your family gone without: food, water, medical care, electricity, cooking fuel, cash income
+#   0=Never, 1=Just once or twice, 2=Several times, 3=Many times, 4=Always, 9=Don’t Know, 98=Refused to Answer, -1=Missing Data
+  names(r2light)[8] <- paste("woFood")
+  r2light$woFood[r2light$woFood >= 5] <- NA
+  names(r2light)[9] <- paste("woWater")
+  r2light$woWater[r2light$woWater >= 5] <- NA
+  names(r2light)[10] <- paste("woMed")
+  r2light$woMed[r2light$woMed >= 5] <- NA
+  names(r2light)[11] <- paste("woElec")
+  r2light$woElec[r2light$woElec >= 5] <- NA
+  names(r2light)[12] <- paste("woFuel")
+  r2light$woFuel[r2light$woFuel >= 5] <- NA
+  names(r2light)[13] <- paste("woCash")
+  r2light$woCash[r2light$woCash >= 5] <- NA
+
+
+#q54 Besides being [national identity], which specific group do you feel you belong to first and foremost?
+  names(r2light)[14] <- paste("ID_Group")
+  r2light$ID_Group[r2light$ID_Group >=996] <- NA
+  r2light$ID_Group[r2light$ID_Group == 0] <- NA
+  r2light$ID_Group  <- factor(r2light$ID_Group, 
+                              levels = c(1,2,3,4,5,6,7,8,10,12,13,14,15,16,50,51,60,61,995), 
+                              labels=c("Language group", "Race", "Region", "Religion", "Occupation", "Class", "Gender", 
+                                       "Personal", "Nationalist", "Traditional leader", "Political party", "Age-related", 
+                                       "African", "Island", "Portuguese", "American", "Family based", "Marginalized", "Other"))
+#   0=Can't explain, 1=Language/tribe/ethnic group, 2=Race, 3=Region, 4=Religion, 5=Occupation, 6=Class, 7=Gender, 8=Individual/personal,
+#  10=Won't differentiate/National identity, 12=Traditional leader, 13=Political party identity, 14=Age-related, 15=African/West African/Pan African, 
+#  16=Island, 50=Portuguese, 51=American, 60=Family/relationship-based (e.g., wife, parent, widow, etc.), 61=Marginalized group (e.g., disabled, etc.),
+#  995=Other, 998=Refused to Answer, 999=Don't Know, -1=Missing data
+
+#q55 Are [respondent’s identity group] economic conditions worse, the same as, or better than other groups in this country?
+  names(r2light)[15] <- paste("EconStat")
+  r2light$EconStat[r2light$EconStat >=9] <- NA
+  r2light$EconStat  <- ordered(r2clean$q55, 
+                               levels = c(1, 2, 3, 4, 5), 
+                               labels=c("Much Better", "Better","Same", "Worse", "Much Worse"))
+
+#q56 How often are [respondent’s identity group] treated unfairly by the government?
+  names(r2light)[16] <- paste("UnfairStat")
+  r2light$UnfairStat[r2light$UnfairStat >=4] <- NA
+  r2light$UnfairStat  <- ordered(r2clean$q56, 
+                                 levels = c(0, 1, 2, 3), 
+                                 labels=c("Never", "Sometimes","Often", "Always"))
+
+#q57 Let us suppose that you had to choose between being a [national identity] and being a [respondent’s identity group]. Which of these two groups do you feel most strongly attached to?
+  names(r2light)[17] <- paste("IDorNAT")
+  r2light$EconStat[r2light$EconStat >=2] <- NA
+  r2light$IDorNAT  <- factor(r2clean$q57, 
+                             levels = c(0, 1), 
+                             labels=c("National", "Group"))
+
+#q80 How old were you at your last birthday?
+  names(r2light)[18] <- paste("Age")
+  r2light$Age[r2light$Age >200]  <- NA
+#q81 Are you the head of the household?
+  names(r2light)[19] <- paste("HH")
+  r2light$HH[r2light$HH >=2] <- NA
+  r2light$HH  <- factor(r2clean$q81, levels = c(0, 1), labels=c("No", "Yes"))
+#q82 In your household, how many children are there under the age of 18?
+  names(r2light)[20] <- paste("Children")
+  r2light$Children[r2light$Children >=90]  <- NA
+
+#q84 What is the highest level of education you have completed?
+  names(r2light)[21] <- paste("educ")
+  r2light$educ[r2light$educ >=10]  <- NA
+  #r2light$educ  <- ordered(r2clean$q84, levels = c(0, 1, 2, 3, 4, 5, 6, 7, 8,  9), labels=c("None", "Informal","Some Primary", "Primary", "Some Secondary", "Secondary", "PSecNocollege", "Some University", "College", "Post Grad"))
+#    0=No formal schooling, 1=Informal schooling, 2=Some primary schooling, 3=Primary school completed, 4=Some secondary school/ High school, 5=Secondary school completed/High school, 6=Post-secondary qualifications, not university, 7=Some university, college, 8=University, college completed, 9=Post-graduate, 98=Refused to Answer, 99=Don’t Know, -1=Missing Data
+#q88 What is your main occupation? (If unemployed, retired, or disabled, what was your last main occupation?)
+  names(r2light)[22] <- paste("occ")
+  r2light$occ[r2light$occ >=996]  <- NA
+  r2light$occ  <- factor(r2clean$q88, levels = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12,14,15,16, 17, 18, 19, 22, 23, 24, 25, 26, 27, 50, 60,160, 161, 162, 180, 181, 260, 261, 262, 263, 380, 381, 382, 990, 991, 992, 993, 995), labels=c("Never had a job", "Farmer_Sub", "Farmer_Mix", "Farmer_Com","FarmWorker", "Fisherman", "Trader", "Businessperson", "Professional", "Supervisor", "Clerical", "Miner", "Domestic", "Teacher", "Government", "Armed Services", "Student", "Housewife", "Retail", "Artisan_formal", "Artisan_informal", "UnskilledManual_formal", "UnskilledManual_informal", "Driver", "sailor", "Traditional healer", "NGO_Agent", "chief", "cattle Breader", "Skilled textile", "Unskilled textile", "national service", "Clergyman", "Motor cyclist", "Apprentice", "Religious leader", "Pastoralist", "Chef", "Unemployed","Retired", "Disabled", "Anything", "Other"))
+#    -1=Missing, 0=Never had a job, 1=Farmer (produces only for consumption), 2=Farmer (produces surplus for sale), 3=Farmer (produces mainly for sale), 4=Farm worker, 5=Fisherman, 6=Trader/Hawker/Vendor, 7=Businessperson, 8=Professional Worker (e.g., lawyer, accountant, nurse, etc.),9 =Supervisor/Foreman, 10=Clerical Worker, 12=Miner,14=Domestic Worker/Maid/Char/Househelp,15=Teacher,16=Government Worker, 17=Armed Services/Police/Security Personnel, 18=Student, 19=Housewife/Works in the Household, 22=Retail worker, 23=Artisan/skilled manual worker – formal sector, 24=Artisan/skilled manual worker – informal sector, 25=Unskilled manual in the formal sector, 26=Unskilled manual in the informal sector 27=Driver, 50=Marine/sailor, 60=Traditional healer,160=Agent of NGO, 161=Local leader/chief/headman, 162=Eleveur/cattle breeder, 180=Skilled textile factory worker, 181=Unskilled textile factory worker, 260=Youth corper/national service, 261=Clergyman/priest/pastor, 262=Motor cyclist/okada man, 263=Apprentice, 380=Religious leader, 381=Pastoralist, 382=Catering/cook/chef, 990=Unemployed, 991=Retired, 992=Disabled, 993=Anything, 995=Other, 998=Refused, 999=Don’t know
+
+#q89 Do you have a job that pays a cash income? Is it full-time or part-time? And are you presently looking for a job (even if you are presently working)?
+  names(r2light)[23] <- paste("employed")
+  r2light$employed[r2light$employed ==9]  <- NA
+  r2light$employed[r2light$employed >=61]  <- NA
+  r2light$employed  <- ordered(r2clean$q89, levels = c(0, 1, 2, 3, 4, 5, 60), labels=c("No_NL", "No_L","PT_NL", "PT_L", "FT_NL", "FT_L", "Traditional healer"))
+# NL = not looking, L  =Looking
+#q90 Before taxes, how much money do you (and your spouse together) earn per month?
+  names(r2light)[24] <- paste("income")
+  r2light$income[r2light$income >=90]  <- NA
+
+#q93a In the last month, how much of the time: Has your physical health reduced the amount of work you normally do inside or outside your home?
+  names(r2light)[25] <- paste("phealth")
+  r2light$phealth[r2light$phealth >=9]  <- NA
+  r2light$phealth  <- ordered(r2clean$q93a, levels = c(0, 1, 2, 3), labels=c("Never", "Once or Twice","Many times", "Always"))
+
+#    0=Never, 1=Just once or twice, 2=Many times, 3=Always, 9=Don’t Know, 98=Refused to Answer, -1=Missing Data
+#q93b In the last month, how much of the time: Have you been so worried or anxious that you have felt tired, worn out, or exhausted?
+  names(r2light)[26] <- paste("mhealth")
+  r2light$mhealth[r2light$mhealth >=9]  <- NA
+  r2light$mhealth  <- ordered(r2clean$q93b, levels = c(0, 1, 2, 3), labels=c("Never", "Once or Twice","Many times", "Always"))
+
+#q96 Respondent’s gender
+  names(r2light)[27] <- paste("gender")
+  r2light$gender[r2light$gender == 1] <- 0
+  r2light$gender[r2light$gender == 2] <- 1
+  r2light$gender  <- factor(r2light$gender, levels = c(0, 1), labels=c("female", "male"))
+
+#q96NEW Respondent’s race?
+  names(r2light)[28] <- paste("race")
+  r2light$race[r2light$race >=96]  <- NA
+  r2light$race  <- factor(r2light$race, levels = c(1, 2, 3, 4, 5, 95), labels=c("Black/African", "White/European", "Coloured/Mixed Race", "Arab/Lebanese", "South Asian", "Other"))
+
+
+r2light2 <- data.frame(data.matrix(r2light))
+
+```
+
+There are 17 observed variables which have moderate correlations with each other as shown in the correlation matrix below.
+
+```{r corChart, echo=FALSE, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+library(polycor) # Get the polycor library to develop a correlation matrix from categorical variables
+
+# Creat the matrix
+t3 <- hetcor(r2light2, ML=TRUE) 
+t4 <- as.matrix(t3$correlations)
+#  diagnostic charts
+library(ggplot2)
+library(reshape2)
+
+g2 <- ggplot(melt(t4), aes(Var1, Var2, fill=abs(value), label=round(value,2))) + 
+  scale_fill_gradient(low="white", high="steelblue") + 
+  geom_tile() + 
+  geom_text(size=0.9) +
+  ggtitle("Correlation Matrix")
+
+g2
+```
+
+The first of the three CFA model test the fit of the model to the data indicating if the latent variables for socio-economic status, deprivation, and social-identity reasonably describe the data. The first model is of the latent variables as completely independent, the second introduces correlations among the latent variables. The third model also includes some correlations between the observed variables.
+
+```{r lavaan, echo=FALSE, message=FALSE, warning=FALSE, fig.height=8, fig.width=8}
+library(lavaan)
+library(semPlot)
+## Measurement Model Comparison
+lv.fp1 <- '#Measurement Model
+          SI =~ EconStat + UnfairStat + relDep + liveCond + iEconStatus + CEconStat
+          SE =~ income + Age + gender  + educ + employed # + AbsDep
+          Dep =~ woFood + woWater + woMed + woElec + woFuel + woCash'
+
+lv.fp2 <- '#Measurement Model
+          SI =~ EconStat + UnfairStat + relDep + liveCond + iEconStatus + CEconStat
+          SE =~ income + Age + gender  + educ + employed
+          Dep =~ woFood + woWater + woMed + woElec + woFuel + woCash
+           # Correlated Errors
+          liveCond ~~ income
+          income ~~ EconStat
+          income ~~ iEconStatus
+          EconStat ~~ iEconStatus
+          UnfairStat ~~ EconStat'
+
+lv.fp3 <- '#Measurement Model
+          SI =~ EconStat + UnfairStat + relDep + liveCond + iEconStatus + CEconStat
+          SE =~ income + Age + gender  + educ + employed
+          Dep =~ woFood + woWater + woMed + woElec + woFuel + woCash
+           # Correlated Errors
+          liveCond ~~ income
+          income ~~ EconStat
+          income ~~ iEconStatus
+          EconStat ~~ iEconStatus
+          SI ~~ SE
+          SI ~~ Dep
+          SE ~~ Dep'
+
+
+#fit the models
+fit1 <- lavaan(lv.fp1, data=r2light2, model.type="cfa", auto.fix.first=TRUE, auto.var=TRUE)
+fit2 <- lavaan(lv.fp2, data=r2light2, model.type="cfa", auto.fix.first=TRUE, auto.var=TRUE)
+fit3 <- lavaan(lv.fp3, data=r2light2, model.type="cfa", auto.fix.first=TRUE, auto.var=TRUE)
+
+
+
+#plot the models
+ semPaths(fit1,"mod", whatLabels= "est", layout="tree2", intercepts=FALSE, sizeLat=6, sizeMan=3, edge.color="black", edge.label.cex=.6, egde.label.color="#0000000", edge.size=3, title=TRUE)
+    title("Measurement Model 1", line=3)
+
+ semPaths(fit2,"mod", whatLabels= "est", layout="tree2", intercepts=FALSE, sizeLat=6, sizeMan=3, edge.color="black", edge.label.cex=.6, egde.label.color="#0000000", edge.size=3, title=TRUE)
+    title("Measurement Model 2", line=3)
+
+ semPaths(fit3,"mod", whatLabels= "est", layout="tree2", intercepts=FALSE, sizeLat=6, sizeMan=3, edge.color="black", edge.label.cex=.6, egde.label.color="#0000000", edge.size=3, title=TRUE)
+    title("Measurement Model 3", line=3)
+```
+
+While the above figures show the loadings and correlations of the different latent variables the table below shows the overall model fit of the three models. Not one of the models has a $latex \chi^2 $ p value greater than 0.05, meaning that none of the models is a great fit of the data. However when looking at the other fit indices one of the models does perform better than all of the others. Model 3 has a IFI in the .85 range and SRMR at the 0.05 level, both of which indicate decent fit. Model 3 also has the lowest BIC and RMSEA values of the three CFA models. Because of this, Model 3 is the preferred model upon which the structure of the full model will be draped.
+
+```{r cfaTable, echo=FALSE, warning=FALSE, message=FALSE, fig.width=7, fig.height=6, results='asis'}
+library(xtable)
+f <- as.data.frame(rbind(
+           fitMeasures(fit1, c("chisq", "df", "ifi", "srmr", "bic", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper" )),
+           fitMeasures(fit2, c("chisq", "df", "ifi", "srmr", "bic", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper" )),
+           fitMeasures(fit3, c("chisq", "df", "ifi", "srmr", "bic", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper" ))
+          ))
+names(f) <- c("ChiSq", "DF", "IFI", "SRMR", "BIC", "RMSEA", "C.I. Lower", "C.I. Upper")
+tli.table <- xtable(f)
+#digits(tli.table)[c(2,6)] <- 0
+print(tli.table,floating=FALSE, type='html')
+```
+
+For the structural component of the model there are four different models that will be tested. The first allows each of the latent variables to predict both mental and physical health, while co-varying with each other. The second model retains most of the first model but allows for social-economic status to predict deprivation and social identity status. The third model reverses the predictive aspect and regresses socio-economic status and deprivation on social-identity status. The final model uses both deprivation and socio-economic status to predict social-identity status.
+
+```{r sem, echo=FALSE, warning=FALSE, message=FALSE, fig.width=7, fig.height=6}
+## Structural Models
+lv.fp4 <- '#Measurement Model
+          SI =~ EconStat + UnfairStat + relDep + liveCond + iEconStatus + CEconStat
+          SE =~ income + Age + gender  + educ + employed
+          Dep =~ woFood + woWater + woMed + woElec + woFuel + woCash
+           # Correlated Errors
+          liveCond ~~ income
+          income ~~ EconStat
+          income ~~ iEconStatus
+          EconStat ~~ iEconStatus
+          SI ~~ SE
+          SI ~~ Dep
+          SE ~~ Dep
+          phealth ~~ mhealth
+           # Regression Models
+          mhealth + phealth ~ SI + SE + Dep'
+
+lv.fp5 <- '#Measurement Model
+          SI =~ EconStat + UnfairStat + relDep + liveCond + iEconStatus + CEconStat
+          SE =~ income + Age + gender  + educ + employed
+          Dep =~ woFood + woWater + woMed + woElec + woFuel + woCash
+           # Correlated Errors
+          liveCond ~~ income
+          income ~~ EconStat
+          income ~~ iEconStatus
+          EconStat ~~ iEconStatus
+          SI ~~ Dep
+          phealth ~~ mhealth
+           # Regression Models
+          phealth + mhealth ~ SI + SE + Dep
+          Dep + SI ~ SE'
+
+lv.fp6 <- '#Measurement Model
+          SI =~ EconStat + UnfairStat + relDep + liveCond + iEconStatus + CEconStat
+          SE =~ income + Age + gender  + educ + employed
+          Dep =~ woFood + woWater + woMed + woElec + woFuel + woCash
+           # Correlated Errors
+          liveCond ~~ income
+          income ~~ EconStat
+          income ~~ iEconStatus
+          EconStat ~~ iEconStatus
+          SE ~~ Dep
+           # Regression Models
+          phealth + mhealth ~ SI + SE + Dep
+          Dep + SE ~ SI
+          '
+
+lv.fp7 <- '#Measurement Model
+          SI =~ EconStat + UnfairStat + relDep + liveCond + iEconStatus + CEconStat
+          SE =~ income + Age + gender  + educ + employed
+          Dep =~ woFood + woWater + woMed + woElec + woFuel + woCash
+           # Correlated Errors
+          liveCond ~~ income
+          income ~~ EconStat
+          income ~~ iEconStatus
+          EconStat ~~ iEconStatus
+          SE ~~ Dep
+          phealth ~~ mhealth
+           # Regression Models
+          phealth + mhealth ~ SI + SE + Dep
+          SI ~ Dep + SE
+          '
+
+#fit the models
+fit4 <- lavaan(lv.fp4, data=r2light2, model.type="sem", auto.fix.first=TRUE, auto.var=TRUE)
+fit5 <- lavaan(lv.fp5, data=r2light2, model.type="sem", auto.fix.first=TRUE, auto.var=TRUE)
+fit6 <- lavaan(lv.fp6, data=r2light2, model.type="sem", auto.fix.first=TRUE, auto.var=TRUE)
+fit7 <- lavaan(lv.fp7, data=r2light2, model.type="sem", auto.fix.first=TRUE, auto.var=TRUE)
+
+
+#plot the models
+ semPaths(fit4,"mod", whatLabels= "est", layout="tree2", intercepts=FALSE, sizeLat=6, sizeMan=3, edge.color="black", edge.label.cex=.6, egde.label.color="#0000000", edge.size=3, title=TRUE)
+    title("SEM Model 1", line=3)
+
+ semPaths(fit5,"mod", whatLabels= "est", layout="tree2", intercepts=FALSE, sizeLat=6, sizeMan=3, edge.color="black", edge.label.cex=.6, egde.label.color="#0000000", edge.size=3, title=TRUE)
+    title("SEM Model 2", line=3)
+
+ semPaths(fit6,"mod", whatLabels= "est", layout="tree2", intercepts=FALSE, sizeLat=6, sizeMan=3, edge.color="black", edge.label.cex=.6, egde.label.color="#0000000", edge.size=3, title=TRUE)
+    title("SEM Model 3", line=3)
+               
+semPaths(fit7,"mod", whatLabels= "est", layout="tree2", intercepts=FALSE, sizeLat=6, sizeMan=3, edge.color="black", edge.label.cex=.6, egde.label.color="#0000000", edge.size=3, title=TRUE)
+    title("SEM Model 4", line=3)
+
+```
+
+In the table below the model fit statistics for each of the SEM model are presented. As with the CFA models none of the $latex \chi^2 $ p values are greater than 0.05. If other fit measures are looked at there are some interesting things going on. Model 3 has the highest $latex \chi^2 $, RMSEA and BIC value, which means that of the three it is one of the worst fitting models. The IFI, $latex \chi^2 $ and BIC for the other three models are identical, meaning each is an equally plausible theory for describing the interactions in the data. There are some differences in the SRMR; Model 1 has a very high value which indicates that Models 2 and 4 have a better fit. Between Models 2 and 4 the only difference in the SRMR is at the 8^th decimal place.
+
+```{r semTable, echo=FALSE, warning=FALSE, message=FALSE, fig.width=7, fig.height=6, results='asis'}
+st <- as.data.frame(rbind(fitMeasures(fit4,  c("chisq", "df", "ifi", "srmr", "bic", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper" )),
+           fitMeasures(fit5, c("chisq", "df", "ifi", "srmr", "bic", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper" )),
+           fitMeasures(fit6, c("chisq", "df", "ifi", "srmr", "bic", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper" )),
+           fitMeasures(fit7, c("chisq", "df", "ifi", "srmr", "bic", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper" ))
+          ))
+names(st) <- c("ChiSq","DF", "IFI", "SRMR", "BIC", "RMSEA", "C.I. Lower", "C.I. Upper")
+tli.table <- xtable(st)
+#digits(tli.table)[c(2,6)] <- 0
+print(tli.table,floating=FALSE, type='html')
+```
+
+So according to these models both socio-economic status and social-identity could be considered key drivers in levels of deprivation. However social-identity is not a significant predictor of either physical or mental health in either of Models 2 or 4. In both of the models socio-economic status also fails as a statistically significant predictor of mental health, though it is significant in predicting physical health. Deprivation is the only latent variable that has a significant correlation with both physical and mental health.
